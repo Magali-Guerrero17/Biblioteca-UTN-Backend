@@ -8,9 +8,10 @@ import { PrestamosModule } from './prestamos/prestamos.module.js';
 import { CategoriasModule } from './categorias/categorias.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ContactoModule } from './contacto/contacto.module.js';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [LibrosModule, AutoresModule, UsuariosModule, PrestamosModule, CategoriasModule, AuthModule, ContactoModule],
+  imports:[ConfigModule.forRoot({ isGlobal: true }),LibrosModule, AutoresModule, UsuariosModule, PrestamosModule, CategoriasModule, AuthModule, ContactoModule],
   controllers: [AppController],
   providers: [AppService],
 })
