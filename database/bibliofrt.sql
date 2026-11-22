@@ -1,193 +1,233 @@
--- --------------------------------------------------------
--- Host:                         127.0.0.1
--- Versión del servidor:         8.4.3 - MySQL Community Server - GPL
--- SO del servidor:              Win64
--- HeidiSQL Versión:             12.16.0.7229
--- --------------------------------------------------------
+-- =====================================================================
+-- BiblioFRT - Base de datos completa: estructura + datos de prueba (PostgreSQL)
+-- Programación IV - UTN FRT - Grupo 5
+--
+-- Base normalizada en tercera forma normal (3FN):
+-- - Cada dato se guarda en un solo lugar: autores, categorías, carreras y
+--   roles tienen su propia tabla y las demás los referencian con una FK.
+-- - No se guardan datos que se pueden calcular: la cantidad de ejemplares
+--   disponibles de un libro es el total menos sus préstamos Pendientes y
+--   Activos, y la calcula el backend.
+-- - Todas las tablas tienen "activo" para el borrado lógico (nunca se
+--   borra una fila: se pone activo = false), y createdAt / updatedAt.
+--
+-- Nombres: las tablas y columnas se llaman igual que los model y campos
+-- de prisma/schema.prisma (como en el repo de la profe): tablas en
+-- singular con mayúscula ("Libro") y columnas en camelCase ("autorId").
+-- En PostgreSQL, un nombre con mayúsculas se escribe entre comillas
+-- dobles; por ejemplo: SELECT * FROM "Libro";
+--
+-- Uso:
+-- - Antes de Prisma (TP9 y TP10): crear la base vacía con
+--     CREATE DATABASE bibliofrt;
+--   conectarse a ella y ejecutar este archivo completo.
+-- - Desde el TP11, las tablas las administra Prisma. Si la migración
+--   inicial reinicia la base, ejecutar solo la PARTE 2 para volver a
+--   cargar los datos.
+-- =====================================================================
 
-/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
-/*!40101 SET NAMES utf8 */;
-/*!50503 SET NAMES utf8mb4 */;
-/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
-/*!40103 SET TIME_ZONE='+00:00' */;
-/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
-/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
-/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+-- =====================================================================
+-- PARTE 1: ESTRUCTURA
+-- =====================================================================
+
+-- Si las tablas ya existen, se borran para poder correr el script de nuevo
+DROP TABLE IF EXISTS "Prestamo", "Usuario", "Alumno", "Libro", "Rol", "Carrera", "Categoria", "Autor" CASCADE;
+
+-- ---------------------------------------------------------------------
+-- Tablas sin claves foráneas (las "de apoyo")
+-- ---------------------------------------------------------------------
+
+CREATE TABLE "Autor" (
+  id          SERIAL PRIMARY KEY,
+  nombre      VARCHAR(100) NOT NULL UNIQUE,
+  activo      BOOLEAN      NOT NULL DEFAULT TRUE,
+  "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE "Categoria" (
+  id          SERIAL PRIMARY KEY,
+  nombre      VARCHAR(60)  NOT NULL UNIQUE,
+  activo      BOOLEAN      NOT NULL DEFAULT TRUE,
+  "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE "Carrera" (
+  id          SERIAL PRIMARY KEY,
+  nombre      VARCHAR(60)  NOT NULL UNIQUE,
+  activo      BOOLEAN      NOT NULL DEFAULT TRUE,
+  "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE "Rol" (
+  id          SERIAL PRIMARY KEY,
+  nombre      VARCHAR(30)  NOT NULL UNIQUE,
+  descripcion VARCHAR(120),
+  activo      BOOLEAN      NOT NULL DEFAULT TRUE,
+  "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ---------------------------------------------------------------------
+-- Libros: cada libro tiene un autor y una categoría.
+-- No hay columna "disponibles": se calcula (3FN).
+-- ---------------------------------------------------------------------
+
+CREATE TABLE "Libro" (
+  id           SERIAL PRIMARY KEY,
+  titulo       VARCHAR(200) NOT NULL,
+  isbn         VARCHAR(13)  NOT NULL UNIQUE,
+  total        INTEGER      NOT NULL CHECK (total > 0),
+  "autorId"     INTEGER      NOT NULL REFERENCES "Autor" (id),
+  "categoriaId" INTEGER      NOT NULL REFERENCES "Categoria" (id),
+  activo      BOOLEAN      NOT NULL DEFAULT TRUE,
+  "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ---------------------------------------------------------------------
+-- Alumnos: cada alumno pertenece a una carrera
+-- ---------------------------------------------------------------------
+
+CREATE TABLE "Alumno" (
+  id          SERIAL PRIMARY KEY,
+  nombre      VARCHAR(60)  NOT NULL,
+  apellido    VARCHAR(60)  NOT NULL,
+  legajo      VARCHAR(15)  NOT NULL UNIQUE,
+  correo      VARCHAR(120) NOT NULL UNIQUE,
+  "carreraId"  INTEGER      NOT NULL REFERENCES "Carrera" (id),
+  activo      BOOLEAN      NOT NULL DEFAULT TRUE,
+  "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ---------------------------------------------------------------------
+-- Usuarios: cada usuario tiene un rol; si es alumno, apunta a su alumno
+-- (el bibliotecario no es alumno, por eso alumno_id puede ser NULL).
+-- La contraseña se guarda encriptada (passwordHash) desde el TP12.
+-- ---------------------------------------------------------------------
+
+CREATE TABLE "Usuario" (
+  id            SERIAL PRIMARY KEY,
+  usuario       VARCHAR(30)  NOT NULL UNIQUE,
+  "passwordHash" VARCHAR(255) NOT NULL,
+  "rolId"        INTEGER      NOT NULL REFERENCES "Rol" (id),
+  "alumnoId"     INTEGER      UNIQUE REFERENCES "Alumno" (id),
+  activo      BOOLEAN      NOT NULL DEFAULT TRUE,
+  "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ---------------------------------------------------------------------
+-- Préstamos: un alumno pide un libro
+--   Pendiente -> solicitado, todavía sin retirar (sin fecha de préstamo)
+--   Activo    -> el alumno tiene el libro ("Vencido" no se guarda: es un
+--                Activo con fecha_devolucion anterior a hoy)
+--   Devuelto  -> el alumno lo devolvió (fecha_devolucion_real)
+--   Cancelado -> la solicitud Pendiente se canceló
+-- ---------------------------------------------------------------------
+
+CREATE TABLE "Prestamo" (
+  id                    SERIAL PRIMARY KEY,
+  "alumnoId"             INTEGER     NOT NULL REFERENCES "Alumno" (id),
+  "libroId"              INTEGER     NOT NULL REFERENCES "Libro" (id),
+  "fechaSolicitud"       DATE        NOT NULL DEFAULT CURRENT_DATE,
+  "fechaPrestamo"        DATE,
+  "fechaDevolucion"      DATE,
+  "fechaDevolucionReal" DATE,
+  renovado              BOOLEAN     NOT NULL DEFAULT FALSE,
+  estado                VARCHAR(20) NOT NULL DEFAULT 'Pendiente'
+                        CHECK (estado IN ('Pendiente', 'Activo', 'Devuelto', 'Cancelado')),
+  activo      BOOLEAN      NOT NULL DEFAULT TRUE,
+  "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CHECK ("fechaDevolucion" >= "fechaPrestamo")
+);
+
+-- =====================================================================
+-- PARTE 2: DATOS DE PRUEBA
+--
+-- No se cargan los id: la base los genera solos (1, 2, 3...) en el orden
+-- de cada INSERT, y las claves foráneas usan esos números.
+-- updatedAt se carga explícito porque, en las tablas que crea Prisma,
+-- esa columna no tiene valor por defecto.
+-- Las fechas de los préstamos son relativas al día en que se corre
+-- (CURRENT_DATE - 5 = hace 5 días): siempre hay uno al día y uno vencido.
+-- =====================================================================
 
 
--- Volcando estructura de base de datos para bibliofrt
-CREATE DATABASE IF NOT EXISTS `bibliofrt` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
-USE `bibliofrt`;
+INSERT INTO "Autor" (nombre, "updatedAt") VALUES
+  ('Robert C. Martin',     CURRENT_TIMESTAMP),  -- 1
+  ('Ian Sommerville',      CURRENT_TIMESTAMP),  -- 2
+  ('James Stewart',        CURRENT_TIMESTAMP),  -- 3
+  ('Abraham Silberschatz', CURRENT_TIMESTAMP),  -- 4
+  ('Andrew Tanenbaum',     CURRENT_TIMESTAMP),  -- 5
+  ('Sears y Zemansky',     CURRENT_TIMESTAMP);  -- 6
 
--- Volcando estructura para tabla bibliofrt.alumnos
-CREATE TABLE IF NOT EXISTS `alumnos` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `nombre` varchar(60) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `apellido` varchar(60) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `legajo` varchar(15) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `correo` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `carrera_id` int NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `legajo` (`legajo`),
-  UNIQUE KEY `correo` (`correo`),
-  KEY `carrera_id` (`carrera_id`),
-  CONSTRAINT `alumnos_ibfk_1` FOREIGN KEY (`carrera_id`) REFERENCES `carreras` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO "Categoria" (nombre, "updatedAt") VALUES
+  ('Programación',   CURRENT_TIMESTAMP),  -- 1
+  ('Ingeniería',     CURRENT_TIMESTAMP),  -- 2
+  ('Matemática',     CURRENT_TIMESTAMP),  -- 3
+  ('Bases de datos', CURRENT_TIMESTAMP),  -- 4
+  ('Sistemas',       CURRENT_TIMESTAMP),  -- 5
+  ('Física',         CURRENT_TIMESTAMP);  -- 6
 
--- Volcando datos para la tabla bibliofrt.alumnos: ~6 rows (aproximadamente)
-INSERT INTO `alumnos` (`id`, `nombre`, `apellido`, `legajo`, `correo`, `carrera_id`) VALUES
-	(1, 'Lucía', 'Gómez', '45012', 'lucia.gomez@ejemplo.com', 1),
-	(2, 'Martín', 'Rojas', '45230', 'martin.rojas@ejemplo.com', 2),
-	(3, 'Sofía', 'Paz', '44871', 'sofia.paz@ejemplo.com', 3),
-	(4, 'Tomás', 'Ledesma', '45544', 'tomas.ledesma@ejemplo.com', 4),
-	(5, 'Valentina', 'Cruz', '45109', 'valentina.cruz@ejemplo.com', 5),
-	(6, 'Joaquín', 'Herrera', '44990', 'joaquin.herrera@ejemplo.com', 1);
+INSERT INTO "Carrera" (nombre, "updatedAt") VALUES
+  ('Ing. en Sistemas', CURRENT_TIMESTAMP),  -- 1
+  ('Ing. Civil',       CURRENT_TIMESTAMP),  -- 2
+  ('Ing. Eléctrica',   CURRENT_TIMESTAMP),  -- 3
+  ('Ing. Mecánica',    CURRENT_TIMESTAMP),  -- 4
+  ('Ing. Química',     CURRENT_TIMESTAMP),  -- 5
+  ('Ing. Electrónica', CURRENT_TIMESTAMP);  -- 6
 
--- Volcando estructura para tabla bibliofrt.autores
-CREATE TABLE IF NOT EXISTS `autores` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `nombre` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO "Rol" (nombre, descripcion, "updatedAt") VALUES
+  ('alumno',        'Alumno de la facultad',       CURRENT_TIMESTAMP),  -- 1
+  ('bibliotecario', 'Gestiona libros y préstamos', CURRENT_TIMESTAMP),  -- 2
+  ('docente',       'Docente de la facultad',      CURRENT_TIMESTAMP),  -- 3
+  ('administrador', 'Administra el sistema',       CURRENT_TIMESTAMP),  -- 4
+  ('invitado',      'Solo consulta el catálogo',   CURRENT_TIMESTAMP);  -- 5
 
--- Volcando datos para la tabla bibliofrt.autores: ~6 rows (aproximadamente)
-INSERT INTO `autores` (`id`, `nombre`) VALUES
-	(1, 'Robert C. Martin'),
-	(2, 'Ian Sommerville'),
-	(3, 'James Stewart'),
-	(4, 'Abraham Silberschatz'),
-	(5, 'Andrew Tanenbaum'),
-	(6, 'Sears y Zemansky');
+-- Disponibles (calculado): 1 → 2 de 3 | 2 → 0 de 1 | 3 → 4 de 5 | 4 → 1 de 2 | 5 → 3 de 4 | 6 → 3 de 3
+INSERT INTO "Libro" (titulo, isbn, total, "autorId", "categoriaId", "updatedAt") VALUES
+  ('Clean Code',                    '9780132350884', 3, 1, 1, CURRENT_TIMESTAMP),  -- 1
+  ('Ingeniería de Software',        '9786073206036', 1, 2, 2, CURRENT_TIMESTAMP),  -- 2
+  ('Cálculo de una variable',       '9786075226392', 5, 3, 3, CURRENT_TIMESTAMP),  -- 3
+  ('Fundamentos de Bases de Datos', '9788448190330', 2, 4, 4, CURRENT_TIMESTAMP),  -- 4
+  ('Sistemas Operativos Modernos',  '9786073222471', 4, 5, 5, CURRENT_TIMESTAMP),  -- 5
+  ('Física Universitaria',          '9786073221245', 3, 6, 6, CURRENT_TIMESTAMP);  -- 6
 
--- Volcando estructura para tabla bibliofrt.carreras
-CREATE TABLE IF NOT EXISTS `carreras` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `nombre` varchar(60) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `nombre` (`nombre`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO "Alumno" (nombre, apellido, legajo, correo, "carreraId", "updatedAt") VALUES
+  ('Lucía',     'Gómez',   '45012', 'lucia.gomez@ejemplo.com',     1, CURRENT_TIMESTAMP),  -- 1
+  ('Martín',    'Rojas',   '45230', 'martin.rojas@ejemplo.com',    2, CURRENT_TIMESTAMP),  -- 2
+  ('Sofía',     'Paz',     '44871', 'sofia.paz@ejemplo.com',       3, CURRENT_TIMESTAMP),  -- 3
+  ('Tomás',     'Ledesma', '45544', 'tomas.ledesma@ejemplo.com',   4, CURRENT_TIMESTAMP),  -- 4
+  ('Valentina', 'Cruz',    '45109', 'valentina.cruz@ejemplo.com',  5, CURRENT_TIMESTAMP),  -- 5
+  ('Joaquín',   'Herrera', '44990', 'joaquin.herrera@ejemplo.com', 1, CURRENT_TIMESTAMP);  -- 6
 
--- Volcando datos para la tabla bibliofrt.carreras: ~5 rows (aproximadamente)
-INSERT INTO `carreras` (`id`, `nombre`) VALUES
-	(1, 'Ing. en Sistemas'),
-	(2, 'Ing. Civil'),
-	(3, 'Ing. Eléctrica'),
-	(4, 'Ing. Mecánica'),
-	(5, 'Ing. Química');
+-- Contraseña de todos: 1234. Por ahora en texto; en el TP12 se reemplaza por su versión encriptada con bcrypt.
+INSERT INTO "Usuario" (usuario, "passwordHash", "rolId", "alumnoId", "updatedAt") VALUES
+  ('bibliotecario', '1234', 2, NULL, CURRENT_TIMESTAMP),
+  ('45012',         '1234', 1, 1,    CURRENT_TIMESTAMP),
+  ('45230',         '1234', 1, 2,    CURRENT_TIMESTAMP),
+  ('44871',         '1234', 1, 3,    CURRENT_TIMESTAMP),
+  ('45544',         '1234', 1, 4,    CURRENT_TIMESTAMP),
+  ('45109',         '1234', 1, 5,    CURRENT_TIMESTAMP),
+  ('44990',         '1234', 1, 6,    CURRENT_TIMESTAMP);
 
--- Volcando estructura para tabla bibliofrt.categorias
-CREATE TABLE IF NOT EXISTS `categorias` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `nombre` varchar(60) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `nombre` (`nombre`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Volcando datos para la tabla bibliofrt.categorias: ~6 rows (aproximadamente)
-INSERT INTO `categorias` (`id`, `nombre`) VALUES
-	(1, 'Programación'),
-	(2, 'Ingeniería'),
-	(3, 'Matemática'),
-	(4, 'Bases de datos'),
-	(5, 'Sistemas'),
-	(6, 'Física');
-
--- Volcando estructura para tabla bibliofrt.libros
-CREATE TABLE IF NOT EXISTS `libros` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `titulo` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `isbn` varchar(13) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `disponibles` int NOT NULL,
-  `total` int NOT NULL,
-  `autor_id` int NOT NULL,
-  `categoria_id` int NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `isbn` (`isbn`),
-  KEY `autor_id` (`autor_id`),
-  KEY `categoria_id` (`categoria_id`),
-  CONSTRAINT `libros_ibfk_1` FOREIGN KEY (`autor_id`) REFERENCES `autores` (`id`),
-  CONSTRAINT `libros_ibfk_2` FOREIGN KEY (`categoria_id`) REFERENCES `categorias` (`id`),
-  CONSTRAINT `libros_chk_1` CHECK ((`disponibles` <= `total`))
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Volcando datos para la tabla bibliofrt.libros: ~6 rows (aproximadamente)
-INSERT INTO `libros` (`id`, `titulo`, `isbn`, `disponibles`, `total`, `autor_id`, `categoria_id`) VALUES
-	(1, 'Clean Code', '9780132350884', 2, 3, 1, 1),
-	(2, 'Ingeniería de Software', '9786073206036', 0, 2, 2, 2),
-	(3, 'Cálculo de una variable', '9786075226392', 4, 5, 3, 3),
-	(4, 'Fundamentos de Bases de Datos', '9788448190330', 1, 2, 4, 4),
-	(5, 'Sistemas Operativos Modernos', '9786073222471', 3, 4, 5, 5),
-	(6, 'Física Universitaria', '9786073221245', 0, 3, 6, 6);
-
--- Volcando estructura para tabla bibliofrt.prestamos
-CREATE TABLE IF NOT EXISTS `prestamos` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `alumno_id` int NOT NULL,
-  `libro_id` int NOT NULL,
-  `fecha_prestamo` date NOT NULL,
-  `fecha_devolucion` date NOT NULL,
-  `estado` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
-  PRIMARY KEY (`id`),
-  KEY `alumno_id` (`alumno_id`),
-  KEY `libro_id` (`libro_id`),
-  CONSTRAINT `prestamos_ibfk_1` FOREIGN KEY (`alumno_id`) REFERENCES `alumnos` (`id`),
-  CONSTRAINT `prestamos_ibfk_2` FOREIGN KEY (`libro_id`) REFERENCES `libros` (`id`),
-  CONSTRAINT `prestamos_chk_1` CHECK ((`fecha_devolucion` >= `fecha_prestamo`))
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Volcando datos para la tabla bibliofrt.prestamos: ~6 rows (aproximadamente)
-INSERT INTO `prestamos` (`id`, `alumno_id`, `libro_id`, `fecha_prestamo`, `fecha_devolucion`, `estado`) VALUES
-	(1, 1, 1, '2026-09-28', '2026-10-12', 'Activo'),
-	(2, 3, 3, '2026-09-10', '2026-09-24', 'Vencido'),
-	(3, 2, 2, '2026-09-01', '2026-09-15', 'Devuelto'),
-	(4, 3, 4, '2026-10-01', '2026-10-15', 'Activo'),
-	(5, 5, 5, '2026-09-25', '2026-10-09', 'Activo'),
-	(6, 1, 6, '2026-08-20', '2026-09-03', 'Devuelto');
-
--- Volcando estructura para tabla bibliofrt.roles
-CREATE TABLE IF NOT EXISTS `roles` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `nombre` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `descripcion` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `nombre` (`nombre`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Volcando datos para la tabla bibliofrt.roles: ~0 rows (aproximadamente)
-INSERT INTO `roles` (`id`, `nombre`, `descripcion`) VALUES
-	(1, 'alumno', 'Alumno de la facultad'),
-	(2, 'bibliotecario', 'Gestiona libros y prestamos'),
-	(3, 'docente', 'Docente de la facultad'),
-	(4, 'administrador', 'Administra el sistema'),
-	(5, 'invitado', 'Solo consulta el catalogo');
-
--- Volcando estructura para tabla bibliofrt.usuarios
-CREATE TABLE IF NOT EXISTS `usuarios` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `usuario` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `rol_id` int NOT NULL,
-  `alumno_id` int DEFAULT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `usuario` (`usuario`),
-  KEY `rol_id` (`rol_id`),
-  KEY `alumno_id` (`alumno_id`),
-  CONSTRAINT `usuarios_ibfk_1` FOREIGN KEY (`rol_id`) REFERENCES `roles` (`id`),
-  CONSTRAINT `usuarios_ibfk_2` FOREIGN KEY (`alumno_id`) REFERENCES `alumnos` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Volcando datos para la tabla bibliofrt.usuarios: ~7 rows (aproximadamente)
-INSERT INTO `usuarios` (`id`, `usuario`, `password`, `rol_id`, `alumno_id`) VALUES
-	(1, 'bibliotecario', '1234', 2, NULL),
-	(2, '45012', '1234', 1, 1),
-	(3, '45230', '1234', 1, 2),
-	(4, '44871', '1234', 1, 3),
-	(5, '45544', '1234', 1, 4),
-	(6, '45109', '1234', 1, 5),
-	(7, '44990', '1234', 1, 6);
-
-/*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
-/*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
-/*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;
-/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
-/*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;
+-- Lucía (45012): un préstamo al día y uno devuelto
+-- Sofía (44871): un préstamo vencido (no puede pedir más) y uno al día
+-- Tomás (45544): sin préstamos
+-- Valentina (45109): un préstamo ya renovado
+-- Joaquín (44990): una solicitud pendiente de retirar
+-- Martín (45230): un préstamo devuelto y una solicitud cancelada
+INSERT INTO "Prestamo" ("alumnoId", "libroId", "fechaSolicitud", "fechaPrestamo", "fechaDevolucion", "fechaDevolucionReal", renovado, estado, "updatedAt") VALUES
+  (1, 1, CURRENT_DATE - 6,  CURRENT_DATE - 5,  CURRENT_DATE + 9,  NULL,              FALSE, 'Activo',    CURRENT_TIMESTAMP),
+  (3, 3, CURRENT_DATE - 25, CURRENT_DATE - 24, CURRENT_DATE - 10, NULL,              FALSE, 'Activo',    CURRENT_TIMESTAMP),
+  (2, 2, CURRENT_DATE - 61, CURRENT_DATE - 60, CURRENT_DATE - 46, CURRENT_DATE - 48, FALSE, 'Devuelto',  CURRENT_TIMESTAMP),
+  (3, 4, CURRENT_DATE - 9,  CURRENT_DATE - 8,  CURRENT_DATE + 6,  NULL,              FALSE, 'Activo',    CURRENT_TIMESTAMP),
+  (5, 5, CURRENT_DATE - 17, CURRENT_DATE - 16, CURRENT_DATE + 5,  NULL,              TRUE,  'Activo',    CURRENT_TIMESTAMP),
+  (1, 6, CURRENT_DATE - 81, CURRENT_DATE - 80, CURRENT_DATE - 66, CURRENT_DATE - 67, FALSE, 'Devuelto',  CURRENT_TIMESTAMP),
+  (6, 2, CURRENT_DATE - 1,  NULL,              NULL,              NULL,              FALSE, 'Pendiente', CURRENT_TIMESTAMP),
+  (2, 6, CURRENT_DATE - 20, NULL,              NULL,              NULL,              FALSE, 'Cancelado', CURRENT_TIMESTAMP);
