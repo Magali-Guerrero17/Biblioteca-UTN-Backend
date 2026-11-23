@@ -4,10 +4,10 @@ import { CreateAuthDto } from './dto/create-auth.dto.js';
 @Injectable()
 export class AuthService {
   register(createAuthDto: CreateAuthDto) {
-    return 'This action registers a new user';
+    return 'Esta acción registra un nuevo usuario';
   }
 
   login(createAuthDto: CreateAuthDto) {
-    return 'This action logs in a user';
+    return 'Esta acción inicia sesión con un usuario';
   }
 }

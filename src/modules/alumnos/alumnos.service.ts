@@ -5,22 +5,22 @@ import { UpdateAlumnoDto } from './dto/update-alumno.dto.js';
 @Injectable()
 export class AlumnosService {
   create(createAlumnoDto: CreateAlumnoDto) {
-    return 'This action adds a new alumno';
+    return 'Esta accion añade un nuevo alumno';
   }
 
   findAll() {
-    return `This action returns all alumnos`;
+    return `Esta accion devuelve todos losalumnos`;
   }
 
   findOne(id: number) {
-    return `This action returns a #${id} alumno`;
+    return `Esta accion devuelve un #${id} alumno`;
   }
 
   update(id: number, updateAlumnoDto: UpdateAlumnoDto) {
-    return `This action updates a #${id} alumno`;
+    return `Esta accion actualiza un #${id} alumno`;
   }
 
   remove(id: number) {
-    return `This action removes a #${id} alumno`;
+    return `Esta accion elimina un #${id} alumno`;
   }
 }
