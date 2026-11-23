@@ -1,0 +1,131 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------
+// Tablas de apoyo (sin claves foráneas)
+// ---------------------------------------------------------------------
+
+model Autor {
+  id        Int      @id @default(autoincrement())
+  nombre    String   @unique @db.VarChar(100)
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  libros    Libro[]
+}
+
+model Categoria {
+  id        Int      @id @default(autoincrement())
+  nombre    String   @unique @db.VarChar(60)
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  libros    Libro[]
+}
+
+model Carrera {
+  id        Int      @id @default(autoincrement())
+  nombre    String   @unique @db.VarChar(60)
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  alumnos   Alumno[]
+}
+
+model Rol {
+  id          Int       @id @default(autoincrement())
+  nombre      String    @unique @db.VarChar(30)
+  descripcion String?   @db.VarChar(120)
+  activo      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  usuarios    Usuario[]
+}
+
+// ---------------------------------------------------------------------
+// Libros: cada libro tiene un autor y una categoría.
+// No hay "disponibles": se calcula en el servicio (3FN).
+// ---------------------------------------------------------------------
+
+model Libro {
+  id          Int        @id @default(autoincrement())
+  titulo      String     @db.VarChar(200)
+  isbn        String     @unique @db.VarChar(13)
+  total       Int
+  autorId     Int
+  autor       Autor      @relation(fields: [autorId], references: [id])
+  categoriaId Int
+  categoria   Categoria  @relation(fields: [categoriaId], references: [id])
+  activo      Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  prestamos   Prestamo[]
+}
+
+// ---------------------------------------------------------------------
+// Alumnos: cada alumno pertenece a una carrera y tiene un solo usuario.
+// ---------------------------------------------------------------------
+
+model Alumno {
+  id        Int        @id @default(autoincrement())
+  nombre    String     @db.VarChar(60)
+  apellido  String     @db.VarChar(60)
+  legajo    String     @unique @db.VarChar(15)
+  correo    String     @unique @db.VarChar(120)
+  carreraId Int
+  carrera   Carrera    @relation(fields: [carreraId], references: [id])
+  activo    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  usuario   Usuario?
+  prestamos Prestamo[]
+}
+
+// ---------------------------------------------------------------------
+// Usuarios: cada usuario tiene un rol; si es alumno, apunta a su alumno
+// (el bibliotecario no es alumno, por eso alumnoId es opcional).
+// ---------------------------------------------------------------------
+
+model Usuario {
+  id           Int      @id @default(autoincrement())
+  usuario      String   @unique @db.VarChar(30)
+  passwordHash String   @db.VarChar(255)
+  rolId        Int
+  rol          Rol      @relation(fields: [rolId], references: [id])
+  alumnoId     Int?     @unique
+  alumno       Alumno?  @relation(fields: [alumnoId], references: [id])
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------
+// Préstamos: un alumno pide un libro.
+// Estados: Pendiente, Activo, Devuelto, Cancelado ("Vencido" se calcula).
+// ---------------------------------------------------------------------
+
+model Prestamo {
+  id                  Int       @id @default(autoincrement())
+  alumnoId            Int
+  alumno              Alumno    @relation(fields: [alumnoId], references: [id])
+  libroId             Int
+  libro               Libro     @relation(fields: [libroId], references: [id])
+  fechaSolicitud      DateTime  @default(now()) @db.Date
+  fechaPrestamo       DateTime? @db.Date
+  fechaDevolucion     DateTime? @db.Date
+  fechaDevolucionReal DateTime? @db.Date
+  renovado            Boolean   @default(false)
+  estado              String    @default("Pendiente") @db.VarChar(20)
+  activo              Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
