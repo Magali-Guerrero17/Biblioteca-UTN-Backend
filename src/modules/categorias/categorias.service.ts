@@ -5,22 +5,22 @@ import { UpdateCategoriaDto } from './dto/update-categoria.dto.js';
 @Injectable()
 export class CategoriasService {
   create(createCategoriaDto: CreateCategoriaDto) {
-    return 'This action adds a new categoria';
+    return 'Esta accion añade una nueva categoria';
   }
 
   findAll() {
-    return `This action returns all categorias`;
+    return `Esta accion devuelve todas las categorias`;
   }
 
   findOne(id: number) {
-    return `This action returns a #${id} categoria`;
+    return `Esta accion devuelve una #${id} categoria`;
   }
 
   update(id: number, updateCategoriaDto: UpdateCategoriaDto) {
-    return `This action updates a #${id} categoria`;
+    return `Esta accion actualiza una #${id} categoria`;
   }
 
   remove(id: number) {
-    return `This action removes a #${id} categoria`;
+    return `Esta accion elimina una #${id} categoria`;
   }
 }
