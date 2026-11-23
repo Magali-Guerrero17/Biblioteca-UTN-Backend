@@ -5,22 +5,22 @@ import { UpdatePrestamoDto } from './dto/update-prestamo.dto.js';
 @Injectable()
 export class PrestamosService {
   create(createPrestamoDto: CreatePrestamoDto) {
-    return 'This action adds a new prestamo';
+    return 'Esta acción crea un nuevo prestamo';
   }
 
   findAll() {
-    return `This action returns all prestamos`;
+    return `Esta acción devuelve todos los prestamos`;
   }
 
   findOne(id: number) {
-    return `This action returns a #${id} prestamo`;
+    return `Esta acción devuelve un prestamo #${id} `;
   }
 
   update(id: number, updatePrestamoDto: UpdatePrestamoDto) {
-    return `This action updates a #${id} prestamo`;
+    return `Esta acción actualiza el prestamo #${id}`;
   }
 
   remove(id: number) {
-    return `This action removes a #${id} prestamo`;
+    return `Esta acción elimina el prestamo #${id}`;
   }
 }
