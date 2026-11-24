@@ -1,1 +1,4 @@
-export class CreatePrestamoDto {}
+export class CreatePrestamoDto {
+  alumnoId: number;
+  libroId: number;
+}
