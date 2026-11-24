@@ -1,26 +1,127 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 
 @Injectable()
 export class UsersService {
-  create(createUserDto: CreateUserDto) {
-    return 'Esta acción crea un nuevo usuario';
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(createUserDto: CreateUserDto) {
+    await this.validateUsuario(createUserDto.usuario);
+
+    return this.prisma.usuario.create({
+      data: {
+        usuario: createUserDto.usuario,
+        passwordHash: createUserDto.password,
+        rolId: createUserDto.rolId,
+        alumnoId: createUserDto.alumnoId,
+      },
+      select: {
+        id: true,
+        usuario: true,
+        rolId: true,
+        alumnoId: true,
+        activo: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
   }
 
   findAll() {
-    return `Esta acción devuelve todos los usuarios`;
+    return this.prisma.usuario.findMany({
+      where: { activo: true },
+      select: {
+        id: true,
+        usuario: true,
+        rolId: true,
+        alumnoId: true,
+        activo: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
   }
 
-  findOne(id: number) {
-    return `Esta acción devuelve un usuario #${id}`;
+  async findOne(id: number) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        usuario: true,
+        rolId: true,
+        alumnoId: true,
+        activo: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!usuario || !usuario.activo) {
+      throw new NotFoundException(`No existe un usuario con id ${id}.`);
+    }
+
+    return usuario;
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `Esta acción actualiza un usuario #${id}`;
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    await this.findOne(id);
+
+    if (updateUserDto.usuario) {
+      await this.validateUsuario(updateUserDto.usuario, id);
+    }
+
+    return this.prisma.usuario.update({
+      where: { id },
+      data: {
+        usuario: updateUserDto.usuario,
+        passwordHash: updateUserDto.password,
+        rolId: updateUserDto.rolId,
+        alumnoId: updateUserDto.alumnoId,
+      },
+      select: {
+        id: true,
+        usuario: true,
+        rolId: true,
+        alumnoId: true,
+        activo: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
   }
 
-  remove(id: number) {
-    return `Esta acción elimina un usuario #${id}`;
+  async remove(id: number) {
+    await this.findOne(id);
+
+    return this.prisma.usuario.update({
+      where: { id },
+      data: { activo: false },
+      select: {
+        id: true,
+        usuario: true,
+        rolId: true,
+        alumnoId: true,
+        activo: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  private async validateUsuario(usuario: string, usuarioId?: number) {
+    const existente = await this.prisma.usuario.findUnique({
+      where: { usuario },
+      select: { id: true },
+    });
+
+    if (existente && existente.id !== usuarioId) {
+      throw new ConflictException('Ya existe un usuario con ese nombre.');
+    }
   }
 }
