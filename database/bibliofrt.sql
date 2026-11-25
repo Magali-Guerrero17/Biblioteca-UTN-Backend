@@ -206,15 +206,15 @@ INSERT INTO "Alumno" (nombre, apellido, legajo, correo, "carreraId", "updatedAt"
   ('Valentina', 'Cruz',    '45109', 'valentina.cruz@ejemplo.com',  5, CURRENT_TIMESTAMP),  -- 5
   ('Joaquín',   'Herrera', '44990', 'joaquin.herrera@ejemplo.com', 1, CURRENT_TIMESTAMP);  -- 6
 
--- Contraseña de todos: 1234. Por ahora en texto; en el TP12 se reemplaza por su versión encriptada con bcrypt.
+-- Contraseña de todos: 1234, guardada encriptada con bcrypt (hash generado con PATCH /users/:id).
 INSERT INTO "Usuario" (usuario, "passwordHash", "rolId", "alumnoId", "updatedAt") VALUES
-  ('bibliotecario', '1234', 2, NULL, CURRENT_TIMESTAMP),
-  ('45012',         '1234', 1, 1,    CURRENT_TIMESTAMP),
-  ('45230',         '1234', 1, 2,    CURRENT_TIMESTAMP),
-  ('44871',         '1234', 1, 3,    CURRENT_TIMESTAMP),
-  ('45544',         '1234', 1, 4,    CURRENT_TIMESTAMP),
-  ('45109',         '1234', 1, 5,    CURRENT_TIMESTAMP),
-  ('44990',         '1234', 1, 6,    CURRENT_TIMESTAMP);
+  ('bibliotecario', '$2b$12$zyzum/0l47t0EQ8MtVzTdeYGZC8L8hAapOEiD9cUpLS/BKGaoJpla', 2, NULL, CURRENT_TIMESTAMP),
+  ('45012',         '$2b$12$OC7IVXFc9C7neUb/N/Z.xeX5kky7c25GrGpEE8PtpFNCQBE2cnYsq', 1, 1,    CURRENT_TIMESTAMP),
+  ('45230',         '$2b$12$oIRAYuZYE8oQLnhfaIFMSO.sohEmJl2r07sst/oI7c3LvLv6jCNJ.', 1, 2,    CURRENT_TIMESTAMP),
+  ('44871',         '$2b$12$qtvCSA8YVIPjscRLmG1/ou0dwZjRiT/MFCbnP8G2Q20c7tj1hbQci', 1, 3,    CURRENT_TIMESTAMP),
+  ('45544',         '$2b$12$6Baf.XbDmi59htL9j6Tmge35nl0VPExXYGM2Vsj0QGZxttRdFgg3W', 1, 4,    CURRENT_TIMESTAMP),
+  ('45109',         '$2b$12$quLPPsf1MGHZoyvefD62buOXoumLg0gSr7CsGEa3CJ0HXayWApkqm', 1, 5,    CURRENT_TIMESTAMP),
+  ('44990',         '$2b$12$RMZM3tDZ85eDJNX6ujbXm.NUF0iuSJblwxKNtB4KbO0BOIIVAO9ca', 1, 6,    CURRENT_TIMESTAMP);
 
 -- Lucía (45012): un préstamo al día y uno devuelto
 -- Sofía (44871): un préstamo vencido (no puede pedir más) y uno al día
