@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
+import { hashPassword } from '../auth/password.util.js';
 
 @Injectable()
 export class UsersService {
@@ -17,7 +18,7 @@ export class UsersService {
     return this.prisma.usuario.create({
       data: {
         usuario: createUserDto.usuario,
-        passwordHash: createUserDto.password,
+        passwordHash: await hashPassword(createUserDto.password),
         rolId: createUserDto.rolId,
         alumnoId: createUserDto.alumnoId,
       },
@@ -76,11 +77,15 @@ export class UsersService {
       await this.validateUsuario(updateUserDto.usuario, id);
     }
 
+const passwordHash = updateUserDto.password
+  ? await hashPassword(updateUserDto.password)
+  : undefined;
+
     return this.prisma.usuario.update({
       where: { id },
       data: {
         usuario: updateUserDto.usuario,
-        passwordHash: updateUserDto.password,
+        passwordHash,
         rolId: updateUserDto.rolId,
         alumnoId: updateUserDto.alumnoId,
       },
