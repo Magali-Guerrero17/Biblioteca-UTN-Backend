@@ -9,18 +9,14 @@ import { UpdateLibroDto } from './dto/update-libro.dto.js';
 
 @Injectable()
 export class LibrosService {
-  // Inyección de dependencias: Nest nos entrega PrismaService ya listo.
   constructor(private readonly prisma: PrismaService) {}
 
-  // Crea un libro. Antes revisa que el ISBN no esté repetido (409).
   async create(createLibroDto: CreateLibroDto) {
     await this.validateIsbn(createLibroDto.isbn);
 
     return this.prisma.libro.create({ data: createLibroDto });
   }
 
-  // Lista solo los libros activos, con autor, categoría y préstamos.
-  // Con map, a cada libro le agrega "disponibles" (no está en la base).
   async findAll() {
     const libros = await this.prisma.libro.findMany({
       where: { activo: true },
@@ -28,7 +24,6 @@ export class LibrosService {
     });
 
     return libros.map((libro) => {
-      // Cuenta los préstamos que tienen un ejemplar ocupado
       const ocupados = libro.prestamos.filter(
         (prestamo) =>
           prestamo.estado === 'Pendiente' || prestamo.estado === 'Activo',
@@ -52,7 +47,6 @@ export class LibrosService {
     });
   }
 
-  // Busca un libro por id. Si no existe o está dado de baja, da 404.
   async findOne(id: number) {
     const libro = await this.prisma.libro.findUnique({
       where: { id },
@@ -63,7 +57,6 @@ export class LibrosService {
       throw new NotFoundException(`No existe un libro con id ${id}.`);
     }
 
-    // Misma cuenta que en findAll, pero para un solo libro
     const ocupados = libro.prestamos.filter(
       (prestamo) =>
         prestamo.estado === 'Pendiente' || prestamo.estado === 'Activo',
@@ -86,8 +79,6 @@ export class LibrosService {
     };
   }
 
-  // Modifica un libro. Primero comprueba que exista (404).
-  // Si vino un ISBN nuevo, revisa que no lo tenga otro libro (409).
   async update(id: number, updateLibroDto: UpdateLibroDto) {
     await this.findOne(id);
 
@@ -101,7 +92,6 @@ export class LibrosService {
     });
   }
 
-  // Borrado lógico: no elimina la fila, la marca con activo: false.
   async remove(id: number) {
     await this.findOne(id);
 
@@ -111,8 +101,6 @@ export class LibrosService {
     });
   }
 
-  // Lanza 409 si ya existe otro libro con ese ISBN.
-  // libroId es opcional: en el update sirve para no chocar consigo mismo.
   private async validateIsbn(isbn: string, libroId?: number) {
     const existingBook = await this.prisma.libro.findUnique({
       where: { isbn },

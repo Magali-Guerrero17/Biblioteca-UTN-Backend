@@ -12,13 +12,11 @@ import { hashPassword, verifyPassword } from './password.util.js';
 
 @Injectable()
 export class AuthService {
-  // Inyección de dependencias: Nest nos entrega PrismaService y JwtService ya listos.
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
   ) {}
 
-  // Registra un alumno: crea el alumno y después su usuario (el usuario es el legajo).
   async register(registerAuthDto: RegisterAuthDto) {
     const passwordHash = await hashPassword(registerAuthDto.password);
 
@@ -64,7 +62,6 @@ export class AuthService {
     }
   }
 
-  // Verifica usuario y contraseña y, si están bien, devuelve un JWT.
   async login(loginAuthDto: LoginAuthDto) {
     const user = await this.prisma.usuario.findUnique({
       where: { usuario: loginAuthDto.usuario },
